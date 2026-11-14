@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling>=1.25,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rag-demo"
+version = "0.1.0"
+description = "Production-minded modular RAG ingestion and retrieval demo"
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "pydantic>=2.8,<3", "pydantic-settings>=2.4,<3", "httpx>=0.27,<1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.8,<1", "mypy>=1.13,<2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rag_demo"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
