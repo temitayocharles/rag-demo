@@ -174,7 +174,7 @@ Local SQLite/CLI workflows remain available with `RAG_DEMO_MODE=false`.
 ## Bundled public Tayoca knowledge and Telegram
 
 The repository now contains `knowledge/tayoca_public_demo_knowledge.md`, a
-public-only sample package. In Vercel set `RAG_DEFAULT_KNOWLEDGE_BASE=tayoca`.
+public-only sample package. In Vercel demo mode the default knowledge base automatically switches to `tayoca`.
 When `RAG_DEMO_MODE=true`, the application indexes the Markdown document into
 **ephemeral memory at cold start**. There is no Notion dependency and no private
 knowledge access. The `tayoca` namespace is available through `/v1/search`.
