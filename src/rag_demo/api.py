@@ -24,10 +24,18 @@ from rag_demo.models import (
 from rag_demo.service import RagService
 from rag_demo.sqlite_store import SQLiteVectorStore
 from rag_demo.store import InMemoryVectorStore
-from rag_demo.telegram import (\n    process_update,\n    register_cloud_webhook,\n    telegram_ready,\n    verify_webhook,\n)
+from rag_demo.telegram import (
+    process_update,
+    register_cloud_webhook,
+    telegram_ready,
+    verify_webhook,
+)
 
 
-logger = logging.getLogger(__name__)\n\n\ndef create_app(settings: Settings | None = None) -> FastAPI:
+logger = logging.getLogger(__name__)
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     if settings.demo_mode and settings.default_knowledge_base == "local":
         settings = settings.model_copy(update={"default_knowledge_base": "tayoca"})
