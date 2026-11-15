@@ -31,7 +31,6 @@ from rag_demo.telegram import (
     verify_webhook,
 )
 
-
 logger = logging.getLogger(__name__)
 
 
