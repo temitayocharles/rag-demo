@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     demo_mode: bool = False
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
+    telegram_auto_register: bool = True
+    telegram_webhook_origin: str = "https://rag-demo-ruddy.vercel.app"
 
     # Backward compatible aliases for existing installations.
     openai_api_key: str | None = None
@@ -59,6 +61,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_configuration(self) -> "Settings":
+        if self.telegram_auto_register and self.telegram_bot_token:
+            validate_api_url(self.telegram_webhook_origin, "RAG_TELEGRAM_WEBHOOK_ORIGIN")
         if self.telegram_chat_id and not (
             self.telegram_chat_id.removeprefix("-").isdigit()
         ):
