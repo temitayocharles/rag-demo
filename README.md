@@ -148,3 +148,25 @@ There is no public file-path API; file and cloud ingestion are CLI-only.
 
 `GET /healthz`, `POST /v1/documents`, `POST /v1/search` remain available.
 Search returns chunks, scores, source IDs and metadata. With an LLM configured,\n`POST /v1/ask` returns a generated answer and source provenance. No frontend is included.
+
+
+## Vercel read-only demonstration
+
+Vercel supports the FastAPI entrypoint `[tool.vercel] entrypoint = "rag_demo.api:app"`.
+For a **key-free public demo only**, configure Vercel environment variables:
+
+```dotenv
+RAG_DEMO_MODE=true
+RAG_STORE_BACKEND=memory
+RAG_LLM_PROVIDER=disabled
+RAG_EMBEDDING_PROVIDER=hash
+```
+
+The demo seeds a non-sensitive sample knowledge document at each cold start.
+`POST /v1/search` works against this fixture; `POST /v1/documents` returns 403,
+and `POST /v1/ask` returns 503 without an LLM.
+The instance-local store is ephemeral, not a shared persistent corpus.
+**Do not enable private uploads or cloud connector sync on this public project.**
+For real knowledge use managed persistent vectors, authentication, and a separate
+background ingestion process before enabling remote writes or private content.
+Local SQLite/CLI workflows remain available with `RAG_DEMO_MODE=false`.

@@ -58,9 +58,39 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.rag_service = service
+        if settings.demo_mode:
+            await service.ingest(
+                DocumentIn(
+                    source_id="demo:overview",
+                    text=(
+                        "Retrieval-augmented generation (RAG) uses document ingestion, "
+                        "chunking, vector embeddings, and retrieval to find relevant "
+                        "evidence. A language model is optional for retrieving chunks, "
+                        "but is required for generating conversational answers. "
+                        "This public demo uses a deterministic hash embedding and "
+                        "an ephemeral in-memory store seeded on application startup. "
+                        "It contains no private documents and does not support uploads. "
+                        "For persistent search use PostgreSQL with pgvector or another "
+                        "external vector database."
+                    ),
+                    metadata={"origin": "public-demo", "safe_to_share": True},
+                ),
+                settings.default_knowledge_base,
+            )
         yield
 
     app = FastAPI(title="RAG Demo API", version="0.3.0", lifespan=lifespan)
+
+    @app.get("/")
+    async def root() -> dict[str, str]:
+        return {
+            "name": "RAG Demo API",
+            "mode": "public-demo" if settings.demo_mode else "local",
+            "docs": "/docs",
+            "health": "/healthz",
+            "knowledge_bases": "/v1/knowledge-bases",
+            "search": "/v1/search",
+        }
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
@@ -72,6 +102,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/v1/documents", response_model=IngestResult)
     async def ingest(document: DocumentIn, request: Request) -> IngestResult:
+        if settings.demo_mode:
+            raise HTTPException(status_code=403, detail="Uploads disabled in public demo")
         try:
             kb = knowledge.require(document.knowledge_base or settings.default_knowledge_base)
             return await request.app.state.rag_service.ingest(document, kb)
