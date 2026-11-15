@@ -29,27 +29,28 @@ def test_invalid_secret_rejected_without_sending():
         }}).status_code == 403
 
 
-def test_only_allowed_chat_gets_reply(monkeypatch):
-    sent = []
-
-    async def capture(bot_token, chat_id, content):
-        sent.append((bot_token, chat_id, content))
-
-    monkeypatch.setattr("rag_demo.telegram.send_message", capture)
+def test_only_allowed_chat_gets_reply():
     settings = Settings(
         _env_file=None, store_backend="memory", telegram_bot_token="123:example",
         telegram_chat_id="789", default_knowledge_base="tayoca"
     )
     with TestClient(create_app(settings)) as client:
-        for chat in [10, 789]:
-            result = client.post(
-                "/integrations/telegram/webhook",
-                headers={"X-Telegram-Bot-Api-Secret-Token": webhook_secret("123:example")},
-                json={"update_id": 1, "message": {"chat": {"id": chat}, "text": "/help"}},
-            )
-            assert result.status_code == 200
-    assert len(sent) == 1 and sent[0][1] == "789"
-    assert "Tayoca knowledge bot" in sent[0][2]
+        unauthorized = client.post(
+            "/integrations/telegram/webhook",
+            headers={"X-Telegram-Bot-Api-Secret-Token": webhook_secret("123:example")},
+            json={"update_id": 1, "message": {"chat": {"id": 10}, "text": "/help"}},
+        )
+        assert unauthorized.status_code == 200
+        assert unauthorized.json() == {"ok": True}
+        allowed = client.post(
+            "/integrations/telegram/webhook",
+            headers={"X-Telegram-Bot-Api-Secret-Token": webhook_secret("123:example")},
+            json={"update_id": 2, "message": {"chat": {"id": 789}, "text": "/help"}},
+        )
+        assert allowed.status_code == 200
+        assert allowed.json()["method"] == "sendMessage"
+        assert allowed.json()["chat_id"] == "789"
+        assert "Tayoca knowledge bot" in allowed.json()["text"]
 
 
 def test_demo_uses_public_knowledge():
@@ -119,4 +120,7 @@ def test_cloud_auto_register_runs_only_in_production(monkeypatch):
     monkeypatch.setenv("VERCEL_ENV", "production")
     with TestClient(create_app(settings)) as client:
         assert client.get("/healthz").status_code == 200
+        assert not calls
+        assert client.get("/").status_code == 200
+        assert client.get("/").status_code == 200
     assert calls == ["registered"]

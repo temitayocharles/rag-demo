@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 
 from rag_demo.chunker import Chunker
 from rag_demo.config import Settings
@@ -90,24 +90,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 ),
                 "tayoca",
             )
-        if (
-            settings.telegram_auto_register
-            and telegram_ready(settings)
-            and os.environ.get("VERCEL_ENV") == "production"
-        ):
-            try:
-                await register_cloud_webhook(settings)
-            except (httpx.HTTPError, ValueError) as exc:
-                # Never log exception details: provider URLs contain the bot token.
-                logger.warning(
-                    "Telegram webhook registration failed (%s)", type(exc).__name__
-                )
+        app.state.telegram_registration_triggered = False
         yield
 
     app = FastAPI(title="RAG Demo API", version="0.3.0", lifespan=lifespan)
 
+    async def register_after_response() -> None:
+        try:
+            await register_cloud_webhook(settings)
+        except (httpx.HTTPError, ValueError) as exc:
+            # Never expose bot token through outbound exception URLs.
+            logger.warning(
+                "Telegram webhook registration failed (%s)", type(exc).__name__
+            )
+
     @app.get("/")
-    async def root() -> dict[str, str]:
+    async def root(
+        request: Request, background_tasks: BackgroundTasks
+    ) -> dict[str, str]:
+        if (
+            settings.telegram_auto_register
+            and telegram_ready(settings)
+            and os.environ.get("VERCEL_ENV") == "production"
+            and not request.app.state.telegram_registration_triggered
+        ):
+            request.app.state.telegram_registration_triggered = True
+            background_tasks.add_task(register_after_response)
         return {
             "name": "RAG Demo API",
             "mode": "public-demo" if settings.demo_mode else "local",
@@ -171,7 +179,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ) from exc
 
     @app.post("/integrations/telegram/webhook", include_in_schema=False)
-    async def telegram_webhook(request: Request) -> dict[str, bool]:
+    async def telegram_webhook(request: Request) -> dict:
         if not telegram_ready(settings):
             raise HTTPException(status_code=503, detail="Telegram not configured")
         if not verify_webhook(
@@ -185,8 +193,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             payload = await request.json()
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Invalid JSON") from exc
-        await process_update(payload, settings, request.app.state.rag_service, generator)
-        return {"ok": True}
+        response = await process_update(
+            payload, settings, request.app.state.rag_service, generator
+        )
+        return response or {"ok": True}
 
     return app
 

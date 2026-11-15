@@ -239,3 +239,18 @@ this operation as a configuration update; frequent cold starts should be
 monitored. A failed registration logs only the exception class without URLs,
 so credentials cannot appear in application logs. This remains a demo without
 persistent Telegram update deduplication or guaranteed processing.
+
+
+### Telegram serverless lifecycle follow-up
+
+Registration occurs as a FastAPI response background task after the first
+production `GET /` request to avoid blocking FastAPI startup. Production-only
+registration uses the bot token already held in Vercel and the same fixed HTTPS
+webhook URL. On each new serverless instance, the first root request can repeat
+this idempotent registration. Trigger `GET /` once after a deployment and review
+Vercel runtime logs for registration success before treating the bot as operational.
+
+For webhook replies, the API now responds with Telegram's supported
+`sendMessage` JSON payload directly to authenticated Telegram requests rather
+than making an outbound sendMessage HTTP call. This avoids the extra network
+round trip. Unauthorized chats receive no reply.
