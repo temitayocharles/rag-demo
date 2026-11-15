@@ -27,6 +27,8 @@ from rag_demo.telegram import process_update, telegram_ready, verify_webhook
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
+    if settings.demo_mode and settings.default_knowledge_base == "local":
+        settings = settings.model_copy(update={"default_knowledge_base": "tayoca"})
     knowledge = KnowledgeBases(settings.knowledge_bases_file)
     knowledge.require(settings.default_knowledge_base)
     if settings.embedding_provider == "hash":
