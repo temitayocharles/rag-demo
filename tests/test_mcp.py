@@ -141,3 +141,61 @@ def test_local_write_requires_write_token(tmp_path):
         }), WRITE_TOKEN)
         assert result.status_code == 200, result.text[:500]
         assert "record_id" in result.text
+
+
+def test_local_ingest_and_get_document_through_mcp(tmp_path):
+    settings = Settings(
+        _env_file=None, demo_mode=False, store_backend="sqlite",
+        sqlite_path=str(tmp_path / "documents.sqlite3"),
+        mcp_read_token=READ_TOKEN, mcp_write_token=WRITE_TOKEN,
+    )
+    with TestClient(create_app(settings)) as client:
+        created = post(client, rpc("ingest_document", {
+            "source_id": "test:policy",
+            "text": "An approved business policy for 2026.",
+            "knowledge_base": "local",
+        }), WRITE_TOKEN)
+        assert created.status_code == 200, created.text[:500]
+        assert "chunks_upserted" in created.text
+        lookup = post(client, rpc("get_document", {
+            "source_id": "test:policy", "knowledge_base": "local",
+        }), READ_TOKEN)
+        assert lookup.status_code == 200
+        assert "approved business policy" in lookup.text
+        search = post(client, rpc("search_knowledge", {
+            "query": "approved policy", "knowledge_base": "local",
+        }), READ_TOKEN)
+        assert search.status_code == 200
+        assert "test:policy" in search.text
+
+
+def test_local_memory_is_audited_and_unverified(tmp_path):
+    settings = Settings(
+        _env_file=None, demo_mode=False, store_backend="sqlite",
+        sqlite_path=str(tmp_path / "memory.sqlite3"),
+        mcp_read_token=READ_TOKEN, mcp_write_token=WRITE_TOKEN,
+    )
+    with TestClient(create_app(settings)) as client:
+        saved = post(client, rpc("save_memory", {
+            "subject": "customer-42",
+            "content": "Preference awaiting human review",
+            "source": "signed intake form",
+        }), WRITE_TOKEN)
+        assert saved.status_code == 200
+        assert "memory_id" in saved.text
+        assert '"verified":false' in saved.text.replace(" ", "")
+
+
+def test_unconfigured_workflow_cannot_dispatch(tmp_path):
+    settings = Settings(
+        _env_file=None, demo_mode=False, store_backend="sqlite",
+        sqlite_path=str(tmp_path / "events.sqlite3"),
+        mcp_read_token=READ_TOKEN, mcp_write_token=WRITE_TOKEN,
+    )
+    with TestClient(create_app(settings)) as client:
+        result = post(client, rpc("trigger_workflow", {
+            "workflow": "default", "payload": {"record_id": "example"},
+        }), WRITE_TOKEN)
+        assert result.status_code == 200
+        assert "Approved workflow endpoint" in result.text
+        assert "isError" in result.text
