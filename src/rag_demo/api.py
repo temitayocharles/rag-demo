@@ -10,7 +10,13 @@ from rag_demo.generator import ChatConfig, OpenAICompatibleGenerator
 from rag_demo.ingestor import Ingestor
 from rag_demo.knowledge import KnowledgeBases
 from rag_demo.models import (
-    AskRequest, AskResponse, Citation, DocumentIn, IngestResult, SearchRequest, SearchResponse,
+    AskRequest,
+    AskResponse,
+    Citation,
+    DocumentIn,
+    IngestResult,
+    SearchRequest,
+    SearchResponse,
 )
 from rag_demo.service import RagService
 from rag_demo.sqlite_store import SQLiteVectorStore
@@ -102,7 +108,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except (httpx.HTTPError, KeyError, IndexError, TypeError) as exc:
             # Never return upstream response bodies or credentials to API consumers.
-            raise HTTPException(status_code=502, detail="LLM or embedding provider failure") from exc
+            raise HTTPException(
+                status_code=502, detail="LLM or embedding provider failure"
+            ) from exc
 
     return app
 
