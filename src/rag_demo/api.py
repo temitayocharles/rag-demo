@@ -61,7 +61,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         app.state.rag_service = service
         if settings.demo_mode:
-            package = (\n                Path(__file__).resolve().parents[2]\n                / "knowledge"\n                / "tayoca_public_demo_knowledge.md"\n            )
+            package = (
+                Path(__file__).resolve().parents[2]
+                / "knowledge"
+                / "tayoca_public_demo_knowledge.md"
+            )
             await service.ingest(
                 DocumentIn(
                     source_id="tayoca:public-knowledge",
