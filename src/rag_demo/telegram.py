@@ -4,13 +4,13 @@ import hmac
 import logging
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 import httpx
 
 from rag_demo.config import Settings
 from rag_demo.generator import OpenAICompatibleGenerator
 from rag_demo.service import RagService
+
+logger = logging.getLogger(__name__)
 
 
 def telegram_ready(settings: Settings) -> bool:
