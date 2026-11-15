@@ -68,6 +68,7 @@ def test_demo_uses_public_knowledge():
 
 def test_cloud_webhook_registration_uses_token_without_exposing_it(monkeypatch):
     import asyncio
+
     import httpx
 
     from rag_demo.telegram import register_cloud_webhook
