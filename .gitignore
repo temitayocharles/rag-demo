@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.py[cod]
+data/
+*.sqlite*
+credentials*.json
+service-account*.json

@@ -1,50 +1,97 @@
-# RAG Demo
+# RAG Demo: Local-first knowledge base POC
 
-A modular retrieval-augmented generation **backend foundation**, with clear contracts for ingestion, chunking, embeddings and similarity search. It does **not** generate answers or call a chat LLM. Nothing is deployed.
+FastAPI ingestion and retrieval backend with explicit knowledge base selection, local SQLite
+persistence, text/PDF/Word/image extraction, opt-in OCR, and configurable read-only Google Drive
+and Notion sources.
 
-## Architecture
+**Status:** Backend proof of concept, not a conversational answer generator. The default
+token-hash embedding is deterministic but **not semantic**. This is **not** production ready,
+and should **not** be deployed publicly without authentication, rate limits, isolation,
+persistent managed storage, logging, and security review.
 
-`POST /v1/documents` → text normalization → deterministic overlapping chunks → embedding provider → replace-by-source vector store.
+## Local installation
 
-`POST /v1/search` → embed query → cosine similarity → top-k chunks with source ID, offsets and metadata.
-
-## Local setup
-
-Requires Python 3.11+.
+Requirements: Python 3.11+, and [Tesseract](https://tesseract-ocr.github.io/) with `eng`
+language data for scanned PDFs/images. Native-text PDFs work without OCR.
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[dev]'
+python -m pip install -e '.[dev,files]'
+cp .env.example .env
+mkdir -p sample_docs
+printf 'RAG grounds answers in trusted knowledge.\n' > sample_docs/intro.txt
+python -m rag_demo.cli sync --kb local
+uvicorn rag_demo.api:app --host 127.0.0.1 --port 8000
+```
+
+Check the available KBs:
+```bash
+curl -fsS http://127.0.0.1:8000/v1/knowledge-bases
+curl -fsS -X POST http://127.0.0.1:8000/v1/search \
+  -H 'Content-Type: application/json' \
+  -d '{"knowledge_base":"local","query":"trusted knowledge","top_k":3}'
+```
+
+Index one file instead:
+```bash
+python -m rag_demo.cli ingest ./my-file.pdf --kb local
+```
+
+Run tests and lint:
+```bash
 pytest -q
 ruff check .
-uvicorn rag_demo.api:app --reload
 ```
 
-Test calls:
+## Configuring knowledge sources
 
-```bash
-curl -fsS http://127.0.0.1:8000/healthz
-curl -fsS -X POST http://127.0.0.1:8000/v1/documents -H 'Content-Type: application/json' -d '{"source_id":"demo-1","text":"Retrieval augmented generation uses documents to provide grounding for model responses.","metadata":{"origin":"example"}}'
-curl -fsS -X POST http://127.0.0.1:8000/v1/search -H 'Content-Type: application/json' -d '{"query":"grounding","top_k":3}'
-```
+Edit `knowledge_bases.json` and select the KB by passing `knowledge_base` in
+`POST /v1/search` and `POST /v1/documents`. The API also exposes
+`GET /v1/knowledge-bases` (metadata only). An unknown KB is rejected.
+KB source IDs and SQLite rows are isolated by KB. This is **not user-level authorization**.
 
-Interactive OpenAPI documentation is available locally at `/docs`.
+- `local`: `{"type":"local","path":"./sample_docs"}` recursively reads supported files.
+- `google_drive`: `{"type":"google_drive","folder_id":"FOLDER_ID"}` reads the
+  explicitly configured immediate folder files; does not recurse subfolders.
+  Create a Google service account, share that folder with its service-account address,
+  and set `RAG_GOOGLE_SERVICE_ACCOUNT_FILE` in your ignored `.env`.
+  Install `pip install -e '.[cloud,files]'`. Drive export supports Google Docs to text,
+  and downloads supported files; Sheets/Slides export is not yet implemented.
+- `notion`: `{"type":"notion","page_id":"PAGE_ID"}` reads nested text blocks from
+  a Notion page. Create a Notion integration, share that page with it,
+  set `RAG_NOTION_TOKEN` in `.env`. Images, file attachments, databases and
+  child-page content outside the selected page are not indexed.
 
-## Contracts
+Use `python -m rag_demo.cli sync --kb work` only after populating real IDs and credentials.
+Sync is manual and performs **read-only** source access. It reindexes returned files but
+does not yet remove records when source documents are deleted. Do not schedule it without
+adding deletion reconciliation, incremental sync, and retry/backoff.
 
-- **Ingestor:** plain UTF-8 text JSON only; normalize Unicode, line endings and NULs; reject blank or oversized documents. Parsing PDFs, HTML, Office files, OCR, and remote source connectors are out of scope.
-- **Chunker:** character windows with overlap, stable SHA-256-derived IDs, position, source ID, character offsets, preserved metadata.
-- **Embedder:** `embed(texts) -> vectors`; deterministic token-hashing embedder is a **demo stub, not a semantic model**. Select `RAG_EMBEDDING_PROVIDER=openai` and set key, model and dimensions for real embedding API calls. The OpenAI adapter assumes support for the `dimensions` input parameter.
-- **Store:** `replace_source(source_id, chunks)` and `search(vector, limit)`. The in-memory implementation is non-durable, non-distributed and isolated per worker. No API authentication or tenant isolation is implemented.
-- **API:** JSON input, Pydantic validation, ingestion result, similarity hits with provenance, `/healthz`.
+Supported local inputs: UTF-8 TXT, Markdown, CSV, JSON, HTML, DOCX, PDF, PNG,
+JPEG and TIFF. OCR on PDF pages with sparse text and OCR on image files rely
+on Tesseract. There are per-file byte, PDF page, image pixel, and file-count limits.
+Scanned tables and complex layouts may not extract accurately. Review output.
 
-## Configuration
+## Environment and storage
 
-See `.env.example`. Never commit `.env` or credentials. The default provider requires no API keys or network requests.
+`.env.example` documents all configurable variables. `.env`, local SQLite databases,
+credential JSON, and `data/` are gitignored. Do **not** commit secrets.
 
-## Production readiness boundaries
+- `RAG_STORE_BACKEND=sqlite` (default) saves documents locally to
+  `RAG_SQLITE_PATH=data/rag.sqlite3`.
+- `RAG_STORE_BACKEND=memory` clears data at process restart.
+- `RAG_EMBEDDING_PROVIDER=hash` needs no external service but is not semantically reliable.
+- `RAG_EMBEDDING_PROVIDER=openai` requires `RAG_OPENAI_API_KEY`,
+  `RAG_EMBEDDING_DIMENSIONS` and `RAG_OPENAI_EMBEDDING_MODEL`.
 
-This is a **production-minded structure**, not a production deployment. Before serving untrusted users: add authentication and tenant authorization; rate limits; persistent vector database such as PostgreSQL with pgvector; migrations and backup/restore; encrypted data handling and retention/deletion policies; request tracing and metrics; ingestion jobs, retry queues and dead-letter handling; document type parsing and malware checks; batch limits; injection-aware retrieval policies; explicit evaluation datasets; versioned embedding model/index migrations; deployment-specific network, timeout, logging and secret management. Define document-level ACL filtering before introducing multi-user or multi-tenant data.
+**Changing models or dimensions requires a full reindex**. SQLite is strictly for local,
+single-machine POC. For Vercel or multiuser deployment migrate to a managed PostgreSQL
+vector index (e.g. Neon pgvector), add background ingestion, auth and access control.
+There is no public file-path API; file and cloud ingestion are CLI-only.
 
-Important: switching embedding provider, model, or vector dimension requires re-embedding the corpus. Source IDs are global in the demo, so there is no tenant boundary. `POST /v1/documents` replaces prior chunks for the same source ID.
+## Existing API contracts
+
+`GET /healthz`, `POST /v1/documents`, `POST /v1/search` remain available.
+Search returns chunks, scores, source IDs and metadata, not LLM-generated answers.
+No frontend or chat LLM is currently included.
