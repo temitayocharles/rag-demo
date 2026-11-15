@@ -152,7 +152,7 @@ Search returns chunks, scores, source IDs and metadata. With an LLM configured,\
 
 ## Vercel read-only demonstration
 
-Vercel supports the FastAPI entrypoint `[tool.vercel] entrypoint = "rag_demo.api:app"`.
+Vercel auto-discovers `src/index.py`, which imports the existing FastAPI application.
 For a **key-free public demo only**, configure Vercel environment variables:
 
 ```dotenv
