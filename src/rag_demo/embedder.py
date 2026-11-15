@@ -31,30 +31,40 @@ class HashEmbedder:
         return vectors
 
 
-class OpenAIEmbedder:
-    """Embedding adapter for the OpenAI embeddings API."""
+class OpenAICompatibleEmbedder:
+    """OpenAI-compatible /embeddings adapter; model features vary by provider."""
 
-    def __init__(self, api_key: str, model: str, dimensions: int, base_url: str) -> None:
+    def __init__(
+        self, api_key: str | None, model: str, dimensions: int, base_url: str,
+        send_dimensions: bool = True,
+    ) -> None:
         self.api_key = api_key
         self.model = model
         self.dimensions = dimensions
         self.base_url = base_url.rstrip("/")
+        self.send_dimensions = send_dimensions
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        payload: dict = {"model": self.model, "input": texts}
+        if self.send_dimensions:
+            payload["dimensions"] = self.dimensions
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                f"{self.base_url}/embeddings",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json={"model": self.model, "input": texts, "dimensions": self.dimensions},
+                f"{self.base_url}/embeddings", headers=headers, json=payload
             )
             response.raise_for_status()
-            payload = response.json()
-        ordered = sorted(payload["data"], key=lambda item: item["index"])
+            data = response.json()
+        ordered = sorted(data["data"], key=lambda item: item["index"])
         if len(ordered) != len(texts):
             raise ValueError("embedding provider returned unexpected number of vectors")
         vectors = [item["embedding"] for item in ordered]
         if any(len(vector) != self.dimensions for vector in vectors):
             raise ValueError("embedding dimension mismatch")
         return vectors
+
+
+# Backward compatibility for the existing public Python API.
+OpenAIEmbedder = OpenAICompatibleEmbedder

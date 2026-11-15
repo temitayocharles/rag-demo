@@ -43,3 +43,21 @@ class SearchHit(BaseModel):
 
 class SearchResponse(BaseModel):
     hits: list[SearchHit]
+
+
+class AskRequest(SearchRequest):
+    pass
+
+
+class Citation(BaseModel):
+    number: int
+    source_id: str
+    chunk_id: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AskResponse(BaseModel):
+    answer: str
+    knowledge_base: str
+    model: str
+    citations: list[Citation]
