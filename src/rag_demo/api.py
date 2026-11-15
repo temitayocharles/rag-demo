@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -21,6 +22,7 @@ from rag_demo.models import (
 from rag_demo.service import RagService
 from rag_demo.sqlite_store import SQLiteVectorStore
 from rag_demo.store import InMemoryVectorStore
+from rag_demo.telegram import process_update, telegram_ready, verify_webhook
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -59,23 +61,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         app.state.rag_service = service
         if settings.demo_mode:
+            package = Path(__file__).resolve().parents[2] / "knowledge" / "tayoca_public_demo_knowledge.md"
             await service.ingest(
                 DocumentIn(
-                    source_id="demo:overview",
-                    text=(
-                        "Retrieval-augmented generation (RAG) uses document ingestion, "
-                        "chunking, vector embeddings, and retrieval to find relevant "
-                        "evidence. A language model is optional for retrieving chunks, "
-                        "but is required for generating conversational answers. "
-                        "This public demo uses a deterministic hash embedding and "
-                        "an ephemeral in-memory store seeded on application startup. "
-                        "It contains no private documents and does not support uploads. "
-                        "For persistent search use PostgreSQL with pgvector or another "
-                        "external vector database."
-                    ),
-                    metadata={"origin": "public-demo", "safe_to_share": True},
+                    source_id="tayoca:public-knowledge",
+                    text=package.read_text(encoding="utf-8"),
+                    metadata={
+                        "origin": "bundled-public-document",
+                        "filename": package.name,
+                        "source_url": "https://tayoca.com/",
+                        "safe_to_share": True,
+                    },
                 ),
-                settings.default_knowledge_base,
+                "tayoca",
             )
         yield
 
@@ -90,6 +88,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "health": "/healthz",
             "knowledge_bases": "/v1/knowledge-bases",
             "search": "/v1/search",
+            "telegram": "ready" if telegram_ready(settings) else "unconfigured",
         }
 
     @app.get("/healthz")
@@ -143,6 +142,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(
                 status_code=502, detail="LLM or embedding provider failure"
             ) from exc
+
+    @app.post("/integrations/telegram/webhook", include_in_schema=False)
+    async def telegram_webhook(request: Request) -> dict[str, bool]:
+        if not telegram_ready(settings):
+            raise HTTPException(status_code=503, detail="Telegram not configured")
+        if not verify_webhook(
+            settings.telegram_bot_token,
+            request.headers.get("X-Telegram-Bot-Api-Secret-Token"),
+        ):
+            raise HTTPException(status_code=403, detail="Invalid Telegram webhook secret")
+        if int(request.headers.get("content-length", "0") or "0") > 32768:
+            raise HTTPException(status_code=413, detail="Telegram update too large")
+        try:
+            payload = await request.json()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid JSON") from exc
+        await process_update(payload, settings, request.app.state.rag_service, generator)
+        return {"ok": True}
 
     return app
 

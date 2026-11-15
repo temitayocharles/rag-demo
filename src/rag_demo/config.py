@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     knowledge_bases_file: Path = Path("knowledge_bases.json")
     default_knowledge_base: str = "local"
     demo_mode: bool = False
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
 
     # Backward compatible aliases for existing installations.
     openai_api_key: str | None = None
@@ -57,6 +59,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_configuration(self) -> "Settings":
+        if self.telegram_chat_id and not (
+            self.telegram_chat_id.removeprefix("-").isdigit()
+        ):
+            raise ValueError("RAG_TELEGRAM_CHAT_ID must be a numeric Telegram chat ID")
         if self.demo_mode and self.store_backend != "memory":
             raise ValueError("RAG_DEMO_MODE requires RAG_STORE_BACKEND=memory")
         if self.demo_mode and self.llm_provider != "disabled":
