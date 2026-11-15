@@ -4,7 +4,7 @@ FastAPI ingestion and retrieval backend with explicit knowledge base selection, 
 persistence, text/PDF/Word/image extraction, opt-in OCR, and configurable read-only Google Drive
 and Notion sources.
 
-**Status:** Backend proof of concept, not a conversational answer generator. The default
+**Status:** Local-first backend POC. Optional grounded LLM generation via `POST /v1/ask`. The default
 token-hash embedding is deterministic but **not semantic**. This is **not** production ready,
 and should **not** be deployed publicly without authentication, rate limits, isolation,
 persistent managed storage, logging, and security review.
@@ -82,10 +82,64 @@ credential JSON, and `data/` are gitignored. Do **not** commit secrets.
   `RAG_SQLITE_PATH=data/rag.sqlite3`.
 - `RAG_STORE_BACKEND=memory` clears data at process restart.
 - `RAG_EMBEDDING_PROVIDER=hash` needs no external service but is not semantically reliable.
-- `RAG_EMBEDDING_PROVIDER=openai` requires `RAG_OPENAI_API_KEY`,
-  `RAG_EMBEDDING_DIMENSIONS` and `RAG_OPENAI_EMBEDDING_MODEL`.
+- `RAG_EMBEDDING_PROVIDER=openai_compatible` selects any compatible embeddings API using
+  `RAG_EMBEDDING_BASE_URL`, `RAG_EMBEDDING_API_KEY`, `RAG_EMBEDDING_MODEL`, and
+  `RAG_EMBEDDING_DIMENSIONS`. Set `RAG_EMBEDDING_SEND_DIMENSIONS=false` for models
+  that do not accept a `dimensions` parameter. The legacy `openai` configuration
+  remains supported but is deprecated.
+- `RAG_LLM_PROVIDER=openai_compatible` activates grounded generation via `POST /v1/ask`.
+  Set `RAG_LLM_BASE_URL`, `RAG_LLM_API_KEY` and `RAG_LLM_MODEL`. The LLM may
+  use a completely different provider from the embedding model.
+- Supported protocol: non-streaming `/chat/completions` and `/embeddings` JSON APIs.
+  Models with different request formats need adapters; compatible provider status must
+  be checked per selected model. There is no automatic fallback or cost routing yet.
+- API keys may be omitted for local OpenAI-compatible endpoints. API base URLs require
+  HTTPS except for loopback HTTP; never send credentials to untrusted endpoints.
 
-**Changing models or dimensions requires a full reindex**. SQLite is strictly for local,
+### Provider selection examples
+
+Configure these in your ignored `.env`, replacing placeholders and leaving keys blank
+only for local unauthenticated servers.
+
+**OpenRouter LLM** (example model identifier is a placeholder):
+```dotenv
+RAG_LLM_PROVIDER=openai_compatible
+RAG_LLM_BASE_URL=https://openrouter.ai/api/v1
+RAG_LLM_API_KEY=YOUR_OPENROUTER_KEY
+RAG_LLM_MODEL=vendor/model-id
+```
+
+**NVIDIA NIM LLM** (example model identifier is a placeholder):
+```dotenv
+RAG_LLM_PROVIDER=openai_compatible
+RAG_LLM_BASE_URL=https://integrate.api.nvidia.com/v1
+RAG_LLM_API_KEY=YOUR_NVIDIA_KEY
+RAG_LLM_MODEL=vendor/model-id
+```
+
+**Locally hosted compatible model**:
+```dotenv
+RAG_LLM_PROVIDER=openai_compatible
+RAG_LLM_BASE_URL=http://127.0.0.1:11434/v1
+RAG_LLM_MODEL=your-local-model
+```
+
+Only one environment block is active at a time. Switching LLMs does not require
+reindexing; switching embedding models does. Provider-specific capabilities, request
+parameters, model names, quotas, and pricing vary.
+
+Example:
+```bash
+curl -fsS -X POST http://127.0.0.1:8000/v1/ask \\
+  -H 'Content-Type: application/json' \\
+  -d '{"knowledge_base":"local","query":"What do my notes say?","top_k":3}'
+```
+
+Generated answers return retrieved source citations. Citations are provenance pointers,
+not proof that each sentence is factually supported. The system does not yet provide
+sentence-level citation verification or prompt-injection defenses beyond basic instructions.
+
+**Changing embedding models or dimensions requires a full reindex**. SQLite is strictly for local,
 single-machine POC. For Vercel or multiuser deployment migrate to a managed PostgreSQL
 vector index (e.g. Neon pgvector), add background ingestion, auth and access control.
 There is no public file-path API; file and cloud ingestion are CLI-only.
@@ -93,5 +147,4 @@ There is no public file-path API; file and cloud ingestion are CLI-only.
 ## Existing API contracts
 
 `GET /healthz`, `POST /v1/documents`, `POST /v1/search` remain available.
-Search returns chunks, scores, source IDs and metadata, not LLM-generated answers.
-No frontend or chat LLM is currently included.
+Search returns chunks, scores, source IDs and metadata. With an LLM configured,\n`POST /v1/ask` returns a generated answer and source provenance. No frontend is included.
