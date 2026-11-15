@@ -77,6 +77,8 @@ def test_cloud_webhook_registration_uses_token_without_exposing_it(monkeypatch):
     sent = {}
 
     def respond(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/getWebhookInfo"):
+            return httpx.Response(200, json={"ok": True, "result": {"url": ""}})
         sent["url"] = str(request.url)
         sent["payload"] = __import__("json").loads(request.content)
         return httpx.Response(200, json={"ok": True, "result": True})
