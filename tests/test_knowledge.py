@@ -1,4 +1,3 @@
-import asyncio
 import json
 
 import pytest
@@ -7,8 +6,6 @@ from fastapi.testclient import TestClient
 from rag_demo.api import create_app
 from rag_demo.config import Settings
 from rag_demo.loaders import as_document, extract_text
-from rag_demo.knowledge import KnowledgeBases
-from rag_demo.models import DocumentIn
 
 
 def test_env_example_and_knowledge_config(tmp_path, monkeypatch):

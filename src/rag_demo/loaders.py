@@ -6,7 +6,9 @@ from rag_demo.config import Settings
 from rag_demo.models import DocumentIn
 
 TEXT_SUFFIXES = {".txt", ".md", ".markdown", ".csv", ".json"}
-SUPPORTED_SUFFIXES = TEXT_SUFFIXES | {".html", ".htm", ".pdf", ".docx", ".png", ".jpg", ".jpeg", ".tif", ".tiff"}
+SUPPORTED_SUFFIXES = TEXT_SUFFIXES | {
+    ".html", ".htm", ".pdf", ".docx", ".png", ".jpg", ".jpeg", ".tif", ".tiff"
+}
 
 
 def extract_text(name: str, content: bytes, settings: Settings) -> str:

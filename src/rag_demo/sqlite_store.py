@@ -21,7 +21,9 @@ class SQLiteVectorStore:
             knowledge_base TEXT NOT NULL, source_id TEXT NOT NULL,
             chunk_id TEXT NOT NULL, payload TEXT NOT NULL, vector TEXT NOT NULL,
             PRIMARY KEY(knowledge_base, chunk_id))""")
-        self.db.execute("CREATE INDEX IF NOT EXISTS idx_chunks_scope ON chunks(knowledge_base, source_id)")
+        self.db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chunks_scope ON chunks(knowledge_base, source_id)"
+        )
         self.db.commit()
 
     async def replace_source(self, source_id: str, chunks: Sequence[StoredChunk],

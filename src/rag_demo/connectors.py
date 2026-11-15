@@ -1,5 +1,4 @@
 """Opt-in, read-only connector adapters scoped to configured IDs."""
-import io
 from collections.abc import Iterator
 from pathlib import Path
 
