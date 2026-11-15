@@ -254,3 +254,16 @@ For webhook replies, the API now responds with Telegram's supported
 `sendMessage` JSON payload directly to authenticated Telegram requests rather
 than making an outbound sendMessage HTTP call. This avoids the extra network
 round trip. Unauthorized chats receive no reply.
+
+
+### Telegram token logging and rotation
+
+Telegram bot API URLs contain the bot token. The application suppresses httpx and
+httpcore INFO-level request URL logging. Existing runtime log entries cannot be
+retroactively redacted by code changes; rotate a bot token if it appeared there.
+
+Registration now checks Telegram getWebhookInfo first to avoid repeated setWebhook
+and 429 responses. When **rotating the token**, set the additional production
+Vercel variable `RAG_TELEGRAM_FORCE_REGISTER=true` for one redeploy to update the
+webhook's derived secret even when the URL is unchanged. After verifying success,
+set it back to false or remove it, then redeploy. Keep tokens out of chat and Git.

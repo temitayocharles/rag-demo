@@ -124,3 +124,46 @@ def test_cloud_auto_register_runs_only_in_production(monkeypatch):
         assert client.get("/").status_code == 200
         assert client.get("/").status_code == 200
     assert calls == ["registered"]
+
+
+def test_existing_webhook_skips_repeated_registration(monkeypatch):
+    import asyncio
+
+    import httpx
+
+    from rag_demo.telegram import register_cloud_webhook
+
+    calls = []
+
+    def reply(request):
+        name = request.url.path.rsplit("/", 1)[-1]
+        calls.append(name)
+        if name == "getWebhookInfo":
+            return httpx.Response(200, json={
+                "ok": True,
+                "result": {
+                    "url": "https://rag-demo-ruddy.vercel.app/integrations/telegram/webhook"
+                },
+            })
+        return httpx.Response(200, json={"ok": True, "result": True})
+
+    real_client = httpx.AsyncClient
+
+    def client_factory(*args, **kwargs):
+        return real_client(*args, transport=httpx.MockTransport(reply), **kwargs)
+
+    monkeypatch.setattr("rag_demo.telegram.httpx.AsyncClient", client_factory)
+    settings = Settings(
+        _env_file=None, telegram_bot_token="123:fake", telegram_chat_id="789"
+    )
+    assert asyncio.run(register_cloud_webhook(settings))
+    assert calls == ["getWebhookInfo"]
+    force = settings.model_copy(update={"telegram_force_register": True})
+    assert asyncio.run(register_cloud_webhook(force))
+    assert calls[-1] == "setWebhook"
+
+
+def test_telegram_http_url_logging_is_disabled():
+    import logging
+
+    assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING
