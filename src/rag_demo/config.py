@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
     telegram_auto_register: bool = True
+    telegram_force_register: bool = False
     telegram_webhook_origin: str = "https://rag-demo-ruddy.vercel.app"
 
     # Backward compatible aliases for existing installations.

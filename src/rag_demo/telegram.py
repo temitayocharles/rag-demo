@@ -11,6 +11,9 @@ from rag_demo.generator import OpenAICompatibleGenerator
 from rag_demo.service import RagService
 
 logger = logging.getLogger(__name__)
+# Telegram Bot API URL paths contain tokens. Suppress outbound URL logs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 def telegram_ready(settings: Settings) -> bool:
@@ -40,8 +43,16 @@ async def register_cloud_webhook(settings: Settings) -> bool:
     webhook_url = settings.telegram_webhook_origin.rstrip("/")
     webhook_url += "/integrations/telegram/webhook"
     async with httpx.AsyncClient(timeout=20.0) as client:
+        endpoint = f"https://api.telegram.org/bot{settings.telegram_bot_token}"
+        if not settings.telegram_force_register:
+            info = await client.post(f"{endpoint}/getWebhookInfo")
+            info.raise_for_status()
+            details = info.json()
+            if details.get("ok") and details.get("result", {}).get("url") == webhook_url:
+                logger.info("Telegram webhook already registered at expected URL")
+                return True
         response = await client.post(
-            f"https://api.telegram.org/bot{settings.telegram_bot_token}/setWebhook",
+            f"{endpoint}/setWebhook",
             json={
                 "url": webhook_url,
                 "secret_token": webhook_secret(settings.telegram_bot_token or ""),
