@@ -267,3 +267,59 @@ and 429 responses. When **rotating the token**, set the additional production
 Vercel variable `RAG_TELEGRAM_FORCE_REGISTER=true` for one redeploy to update the
 webhook's derived secret even when the URL is unchanged. After verifying success,
 set it back to false or remove it, then redeploy. Keep tokens out of chat and Git.
+
+## MCP server for agents and n8n
+
+The application now exposes a **Streamable HTTP** Model Context Protocol server at
+`/mcp`. It reuses the same FastAPI retrieval engine. Both protocol generations
+supported by the official Python MCP SDK are handled in stateless JSON-response
+mode. Clients such as n8n should use **HTTP Streamable** and **Bearer** credentials.
+
+MCP is **disabled by default** and responds HTTP 503 until an MCP token is
+configured. Set `RAG_MCP_READ_TOKEN` (32+ random characters) in the hosting
+environment to allow read-only clients. Set a **different**
+`RAG_MCP_WRITE_TOKEN` to authorize writes on a durable host. Never paste
+tokens in conversation or commit them to Git.
+
+Example client connection:
+
+```text
+Endpoint: https://rag-demo-ruddy.vercel.app/mcp
+Transport: Streamable HTTP
+Authentication: Bearer
+Token: <configured RAG_MCP_READ_TOKEN>
+```
+
+### MCP tools
+
+| Tool | Permission | Notes |
+|---|---|---|
+| `list_knowledge_bases` | read | Public demo lists only `tayoca` |
+| `search_knowledge` | read | Relevant chunks with scores and provenance |
+| `ask_knowledge` | read | Returns disabled when no LLM is configured |
+| `get_document` | read | Bundled public or authorized registered document |
+| `get_source_metadata` | read | Provenance for known source IDs |
+| `ingest_document` | write | Index and register a text document |
+| `create_business_record` | write | Immutable structured record, <= 16 KiB |
+| `save_memory` | write | Unverified memory with provenance |
+| `trigger_workflow` | write | Signed event to a configured n8n webhook only |
+
+**Write safety:** All writes are rejected with HTTP 403 on the Vercel public
+demo, even with a valid write token. Vercel uses in-memory storage and must
+never acknowledge a business write that cannot persist. A separate durable
+SQLite single-host deployment supports writes; for customer-grade cloud
+storage, implement an authenticated tenant-scoped PostgreSQL adapter first.
+The local SQLite MCP record, memory and audit tables are for single-tenant
+proof-of-concept usage only.
+
+Workflow execution is disabled unless `RAG_MCP_WORKFLOW_URL` and a
+32+ character `RAG_MCP_WORKFLOW_SECRET` are configured on the durable host.
+`trigger_workflow` accepts only `RAG_MCP_WORKFLOW_NAME` (default `default`)
+and sends HMAC-SHA256 in `X-RAG-Signature`. The receiver MUST validate this
+signature before acting and deduplicate `X-RAG-Event-ID`. The return value
+`delivered` means HTTP accepted, **not** that the workflow completed.
+
+Before connecting production agents, add stronger multi-tenant identity
+authorization, user-scoped audit, quotas, transactional outbox with replay
+and recovery, encryption, and retention/deletion policies. A shared token
+is a single-client bootstrap, not an OAuth deployment.
