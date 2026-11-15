@@ -127,7 +127,7 @@ def create_mcp_gateway(
         saved = db.save_document(kb, document)
         return {**saved, "chunks_upserted": result.chunks_upserted}
 
-    @mcp.tool(description="Create an immutable business record; no arbitrary SQL (write permission).")
+    @mcp.tool(description="Create an immutable business record (write permission).")
     def create_business_record(kind: str, payload: dict[str, Any]) -> dict:
         db = require_write()
         if not 1 <= len(kind) <= 64 or not kind.replace("_", "").isalnum():
