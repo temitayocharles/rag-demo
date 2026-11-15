@@ -5,7 +5,7 @@ the MCP gateway before accessing these methods. No dynamic SQL or arbitrary quer
 """
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -13,7 +13,7 @@ from rag_demo.models import DocumentIn
 
 
 def utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class McpDataStore:
