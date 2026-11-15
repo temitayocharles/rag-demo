@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     sqlite_path: str = "data/rag.sqlite3"
     knowledge_bases_file: Path = Path("knowledge_bases.json")
     default_knowledge_base: str = "local"
+    demo_mode: bool = False
 
     # Backward compatible aliases for existing installations.
     openai_api_key: str | None = None
@@ -56,6 +57,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_configuration(self) -> "Settings":
+        if self.demo_mode and self.store_backend != "memory":
+            raise ValueError("RAG_DEMO_MODE requires RAG_STORE_BACKEND=memory")
+        if self.demo_mode and self.llm_provider != "disabled":
+            raise ValueError("RAG_DEMO_MODE requires RAG_LLM_PROVIDER=disabled")
         if self.chunk_overlap >= self.chunk_size:
             raise ValueError("chunk_overlap must be less than chunk_size")
         if self.embedding_provider == "openai":
