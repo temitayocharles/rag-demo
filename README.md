@@ -170,3 +170,53 @@ The instance-local store is ephemeral, not a shared persistent corpus.
 For real knowledge use managed persistent vectors, authentication, and a separate
 background ingestion process before enabling remote writes or private content.
 Local SQLite/CLI workflows remain available with `RAG_DEMO_MODE=false`.
+
+## Bundled public Tayoca knowledge and Telegram
+
+The repository now contains `knowledge/tayoca_public_demo_knowledge.md`, a
+public-only sample package. In Vercel demo mode the default knowledge base automatically switches to `tayoca`.
+When `RAG_DEMO_MODE=true`, the application indexes the Markdown document into
+**ephemeral memory at cold start**. There is no Notion dependency and no private
+knowledge access. The `tayoca` namespace is available through `/v1/search`.
+
+### Telegram integration contract
+
+Telegram uses `POST /integrations/telegram/webhook`. The endpoint is **disabled**
+until both environment variables below are set:
+
+```dotenv
+RAG_TELEGRAM_BOT_TOKEN=<set-in-Vercel-secrets>
+RAG_TELEGRAM_CHAT_ID=<numeric-chat-id>
+```
+
+Add these in the **Vercel project environment settings**, not in GitHub or this
+public README. Redeploy production after changing runtime environment variables.
+For the local registration command, set the same values in your ignored local
+`.env`. Never send the bot token in a chat message or commit it to Git.
+
+Telegram requires HTTPS and a webhook secret. To avoid needing a third secret,
+the registration script derives a deterministic secret token from the bot token,
+passes it to Telegram's `setWebhook`, and the server verifies it in the
+`X-Telegram-Bot-Api-Secret-Token` header using a constant-time comparison.
+Requests from chat IDs other than the allowlisted chat are ignored. The webhook
+does not accept uploads, writes, or Telegram-origin configuration changes.
+
+After both Vercel values are set, production is redeployed, and your local
+environment is configured, run:
+
+```bash
+python scripts/register_telegram_webhook.py https://rag-demo-ruddy.vercel.app
+```
+
+The script drops any pending messages on registration to prevent replay of old
+updates. Telegram chats support `/start`, `/help`, `/search <question>`,
+`/ask <question>`, or a plain question. With the LLM disabled, search returns
+retrieved public-source excerpts; it does **not** fabricate an LLM answer.
+Only real API-backed provider configuration enables generated answers.
+
+**Limitations:** Only one configured chat is authorized. Updates are processed
+synchronously with no durable deduplication or background queue, so delivery
+retries may cause duplicate messages if Telegram times out. The public demo
+does not persist chat history or uploaded documents. Provider errors may
+require retry. Use private chat testing first, and secure a production bot
+with persistent state and rate limits before broader use.

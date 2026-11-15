@@ -2,13 +2,33 @@
   "knowledge_bases": {
     "local": {
       "description": "Local proof-of-concept documents",
-      "sources": [{"type": "local", "path": "./sample_docs"}]
+      "sources": [
+        {
+          "type": "local",
+          "path": "./sample_docs"
+        }
+      ]
     },
     "work": {
       "description": "Opt-in future cloud knowledge",
       "sources": [
-        {"type": "google_drive", "folder_id": "REPLACE_WITH_FOLDER_ID"},
-        {"type": "notion", "page_id": "REPLACE_WITH_PAGE_ID"}
+        {
+          "type": "google_drive",
+          "folder_id": "REPLACE_WITH_FOLDER_ID"
+        },
+        {
+          "type": "notion",
+          "page_id": "REPLACE_WITH_PAGE_ID"
+        }
+      ]
+    },
+    "tayoca": {
+      "description": "Public Tayoca knowledge package (safe to demo)",
+      "sources": [
+        {
+          "type": "local",
+          "path": "./knowledge"
+        }
       ]
     }
   }
