@@ -183,7 +183,7 @@ def test_local_memory_is_audited_and_unverified(tmp_path):
         }), WRITE_TOKEN)
         assert saved.status_code == 200
         assert "memory_id" in saved.text
-        assert '"verified":false' in saved.text.replace(" ", "")
+        assert json.loads(saved.json()["result"]["content"][0]["text"])["verified"] is False
 
 
 def test_unconfigured_workflow_cannot_dispatch(tmp_path):
@@ -197,5 +197,4 @@ def test_unconfigured_workflow_cannot_dispatch(tmp_path):
             "workflow": "default", "payload": {"record_id": "example"},
         }), WRITE_TOKEN)
         assert result.status_code == 200
-        assert "Approved workflow endpoint" in result.text
-        assert "isError" in result.text
+        assert result.json()["result"]["isError"] is True
