@@ -39,7 +39,7 @@ async def register_cloud_webhook(settings: Settings) -> bool:
         return False
     webhook_url = settings.telegram_webhook_origin.rstrip("/")
     webhook_url += "/integrations/telegram/webhook"
-    async with httpx.AsyncClient(timeout=8.0) as client:
+    async with httpx.AsyncClient(timeout=20.0) as client:
         response = await client.post(
             f"https://api.telegram.org/bot{settings.telegram_bot_token}/setWebhook",
             json={
@@ -73,7 +73,7 @@ async def process_update(
     settings: Settings,
     service: RagService,
     generator: OpenAICompatibleGenerator | None,
-) -> None:
+) -> dict[str, str] | None:
     if not isinstance(payload, dict):
         return
     message = payload.get("message")
@@ -121,8 +121,13 @@ async def process_update(
             else:
                 reply = "Retrieved source excerpts (not generated answers):\n\n"
                 reply += format_hits(hits)
-    # Only the allowlisted chat ever receives a message.
-    await send_message(settings.telegram_bot_token or "", str(settings.telegram_chat_id), reply)
+    # Telegram can execute sendMessage from the authenticated webhook response.
+    # No second outbound HTTP call is needed from the serverless function.
+    return {
+        "method": "sendMessage",
+        "chat_id": str(settings.telegram_chat_id),
+        "text": reply[:3900],
+    }
 
 
 def format_hits(hits: list) -> str:
