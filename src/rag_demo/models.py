@@ -7,6 +7,7 @@ class DocumentIn(BaseModel):
     source_id: str = Field(min_length=1, max_length=256)
     text: str = Field(min_length=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    knowledge_base: str | None = None
 
 
 class Chunk(BaseModel):
@@ -32,6 +33,7 @@ class IngestResult(BaseModel):
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=4000)
     top_k: int = Field(default=5, ge=1, le=50)
+    knowledge_base: str | None = None
 
 
 class SearchHit(BaseModel):
