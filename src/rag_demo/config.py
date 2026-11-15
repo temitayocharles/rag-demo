@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     telegram_auto_register: bool = True
     telegram_force_register: bool = False
     telegram_webhook_origin: str = "https://rag-demo-ruddy.vercel.app"
+    mcp_read_token: str | None = None
+    mcp_write_token: str | None = None
+    mcp_workflow_url: str | None = None
+    mcp_workflow_secret: str | None = None
+    mcp_workflow_name: str = "default"
 
     # Backward compatible aliases for existing installations.
     openai_api_key: str | None = None
@@ -62,6 +67,21 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_configuration(self) -> "Settings":
+        for label, token in [
+            ("RAG_MCP_READ_TOKEN", self.mcp_read_token),
+            ("RAG_MCP_WRITE_TOKEN", self.mcp_write_token),
+        ]:
+            if token and len(token) < 32:
+                raise ValueError(f"{label} must be at least 32 characters")
+        if (
+            self.mcp_read_token and self.mcp_write_token
+            and self.mcp_read_token == self.mcp_write_token
+        ):
+            raise ValueError("MCP read and write tokens must differ")
+        if self.mcp_workflow_url:
+            validate_api_url(self.mcp_workflow_url, "RAG_MCP_WORKFLOW_URL")
+        if self.mcp_workflow_secret and len(self.mcp_workflow_secret) < 32:
+            raise ValueError("RAG_MCP_WORKFLOW_SECRET must be at least 32 characters")
         if self.telegram_auto_register and self.telegram_bot_token:
             validate_api_url(self.telegram_webhook_origin, "RAG_TELEGRAM_WEBHOOK_ORIGIN")
         if self.telegram_chat_id and not (

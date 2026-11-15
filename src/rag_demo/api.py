@@ -1,6 +1,6 @@
 import logging
 import os
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
 
 import httpx
@@ -12,6 +12,7 @@ from rag_demo.embedder import HashEmbedder, OpenAICompatibleEmbedder
 from rag_demo.generator import ChatConfig, OpenAICompatibleGenerator
 from rag_demo.ingestor import Ingestor
 from rag_demo.knowledge import KnowledgeBases
+from rag_demo.mcp_gateway import create_mcp_gateway
 from rag_demo.models import (
     AskRequest,
     AskResponse,
@@ -68,6 +69,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if settings.llm_provider == "openai_compatible" else None
     )
 
+    mcp_server, mcp_asgi = create_mcp_gateway(settings, service, knowledge, generator)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.rag_service = service
@@ -91,7 +94,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "tayoca",
             )
         app.state.telegram_registration_triggered = False
-        yield
+        async with AsyncExitStack() as stack:
+            await stack.enter_async_context(mcp_server.session_manager.run())
+            yield
 
     app = FastAPI(title="RAG Demo API", version="0.3.0", lifespan=lifespan)
 
@@ -198,6 +203,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         return response or {"ok": True}
 
+    app.mount("/", mcp_asgi)
     return app
 
 
