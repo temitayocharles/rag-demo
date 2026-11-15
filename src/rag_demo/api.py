@@ -1,3 +1,5 @@
+import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -22,7 +24,14 @@ from rag_demo.models import (
 from rag_demo.service import RagService
 from rag_demo.sqlite_store import SQLiteVectorStore
 from rag_demo.store import InMemoryVectorStore
-from rag_demo.telegram import process_update, telegram_ready, verify_webhook
+from rag_demo.telegram import (
+    process_update,
+    register_cloud_webhook,
+    telegram_ready,
+    verify_webhook,
+)
+
+logger = logging.getLogger(__name__)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -81,6 +90,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 ),
                 "tayoca",
             )
+        if (
+            settings.telegram_auto_register
+            and telegram_ready(settings)
+            and os.environ.get("VERCEL_ENV") == "production"
+        ):
+            try:
+                await register_cloud_webhook(settings)
+            except (httpx.HTTPError, ValueError) as exc:
+                # Never log exception details: provider URLs contain the bot token.
+                logger.warning(
+                    "Telegram webhook registration failed (%s)", type(exc).__name__
+                )
         yield
 
     app = FastAPI(title="RAG Demo API", version="0.3.0", lifespan=lifespan)

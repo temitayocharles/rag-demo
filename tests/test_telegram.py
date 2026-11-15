@@ -64,3 +64,59 @@ def test_demo_uses_public_knowledge():
         assert len(hits.json()["hits"]) > 0
         all_text = " ".join(hit["chunk"]["text"] for hit in hits.json()["hits"])
         assert "Tayoca" in all_text
+
+
+def test_cloud_webhook_registration_uses_token_without_exposing_it(monkeypatch):
+    import asyncio
+
+    import httpx
+
+    from rag_demo.telegram import register_cloud_webhook
+
+    sent = {}
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        sent["url"] = str(request.url)
+        sent["payload"] = __import__("json").loads(request.content)
+        return httpx.Response(200, json={"ok": True, "result": True})
+
+    real_client = httpx.AsyncClient
+
+    def client_factory(*args, **kwargs):
+        return real_client(*args, transport=httpx.MockTransport(respond), **kwargs)
+
+    monkeypatch.setattr("rag_demo.telegram.httpx.AsyncClient", client_factory)
+    settings = Settings(
+        _env_file=None, telegram_bot_token="123:fake", telegram_chat_id="789"
+    )
+    assert asyncio.run(register_cloud_webhook(settings))
+    assert sent["url"] == "https://api.telegram.org/bot123:fake/setWebhook"
+    assert sent["payload"]["url"] == (
+        "https://rag-demo-ruddy.vercel.app/integrations/telegram/webhook"
+    )
+    assert sent["payload"]["secret_token"] == webhook_secret("123:fake")
+    assert sent["payload"]["drop_pending_updates"] is False
+
+
+def test_cloud_auto_register_runs_only_in_production(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    calls = []
+
+    async def capture(_settings):
+        calls.append("registered")
+        return True
+
+    monkeypatch.setattr("rag_demo.api.register_cloud_webhook", capture)
+    settings = Settings(
+        _env_file=None, store_backend="memory",
+        telegram_bot_token="123:fake", telegram_chat_id="789",
+    )
+    monkeypatch.setenv("VERCEL_ENV", "preview")
+    with TestClient(create_app(settings)) as client:
+        assert client.get("/healthz").status_code == 200
+    assert not calls
+    monkeypatch.setenv("VERCEL_ENV", "production")
+    with TestClient(create_app(settings)) as client:
+        assert client.get("/healthz").status_code == 200
+    assert calls == ["registered"]
