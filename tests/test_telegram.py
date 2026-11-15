@@ -1,10 +1,8 @@
-import asyncio
-
 from fastapi.testclient import TestClient
 
 from rag_demo.api import create_app
 from rag_demo.config import Settings
-from rag_demo.telegram import process_update, telegram_ready, verify_webhook, webhook_secret
+from rag_demo.telegram import telegram_ready, verify_webhook, webhook_secret
 
 
 def test_secret_and_configuration():
