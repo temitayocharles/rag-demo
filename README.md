@@ -220,3 +220,22 @@ retries may cause duplicate messages if Telegram times out. The public demo
 does not persist chat history or uploaded documents. Provider errors may
 require retry. Use private chat testing first, and secure a production bot
 with persistent state and rate limits before broader use.
+
+
+### Cloud-only Telegram activation (no local commands)
+
+On the deployed Vercel production app, setting `RAG_TELEGRAM_BOT_TOKEN` and
+`RAG_TELEGRAM_CHAT_ID` and redeploying is sufficient. On production function
+startup the app calls Telegram `setWebhook` over HTTPS using its server-side bot
+credential and a derived, authenticated secret header. No Mac setup is needed.
+Registration is disabled for preview and local environments. The optional
+`RAG_TELEGRAM_WEBHOOK_ORIGIN` changes the production callback origin (default:
+`https://rag-demo-ruddy.vercel.app`), and `RAG_TELEGRAM_AUTO_REGISTER=false`
+disables automatic registration. Only production can auto-register; otherwise
+use the existing manual registration script.
+
+Startup re-registers the same destination per cold instance. Telegram treats
+this operation as a configuration update; frequent cold starts should be
+monitored. A failed registration logs only the exception class without URLs,
+so credentials cannot appear in application logs. This remains a demo without
+persistent Telegram update deduplication or guaranteed processing.

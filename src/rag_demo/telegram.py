@@ -1,7 +1,10 @@
 """Telegram webhook contract: secret header, allowlisted chat, no token in responses."""
 import hashlib
 import hmac
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import httpx
 
@@ -24,6 +27,33 @@ def verify_webhook(bot_token: str | None, provided: str | None) -> bool:
         bot_token and provided
         and hmac.compare_digest(webhook_secret(bot_token), provided)
     )
+
+
+async def register_cloud_webhook(settings: Settings) -> bool:
+    """Cloud-only, idempotent Telegram webhook registration using server-side secrets.
+
+    It runs once per serverless instance startup and never prints token-bearing URLs.
+    Only the production deployment may update Telegram's webhook destination.
+    """
+    if not telegram_ready(settings):
+        return False
+    webhook_url = settings.telegram_webhook_origin.rstrip("/")
+    webhook_url += "/integrations/telegram/webhook"
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        response = await client.post(
+            f"https://api.telegram.org/bot{settings.telegram_bot_token}/setWebhook",
+            json={
+                "url": webhook_url,
+                "secret_token": webhook_secret(settings.telegram_bot_token or ""),
+                "allowed_updates": ["message"],
+                "drop_pending_updates": False,
+            },
+        )
+        response.raise_for_status()
+        if not response.json().get("ok", False):
+            raise ValueError("Telegram declined webhook registration")
+    logger.info("Telegram production webhook registered")
+    return True
 
 
 async def send_message(bot_token: str, chat_id: str, text: str) -> None:
