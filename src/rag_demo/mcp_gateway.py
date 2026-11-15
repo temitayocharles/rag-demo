@@ -189,7 +189,7 @@ def create_mcp_gateway(
         max_request_body_size=131072,
         transport_security=TransportSecuritySettings(
             allowed_hosts=[
-                "localhost:*", "127.0.0.1:*", "rag-demo-ruddy.vercel.app",
+                "localhost:*", "127.0.0.1:*", "testserver", "rag-demo-ruddy.vercel.app",
                 "*.vercel.app",
             ],
         ),
