@@ -55,7 +55,6 @@ def test_only_allowed_chat_gets_reply(monkeypatch):
 def test_demo_uses_public_knowledge():
     settings = Settings(
         _env_file=None, store_backend="memory", demo_mode=True,
-        default_knowledge_base="tayoca",
     )
     with TestClient(create_app(settings)) as client:
         hits = client.post("/v1/search", json={
