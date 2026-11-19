@@ -169,3 +169,47 @@ def test_telegram_http_url_logging_is_disabled():
     import logging
 
     assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING
+
+
+def test_telegram_default_answer_is_bounded_not_a_source_dump():
+    """Ordinary text and /ask must be short in the deliberately LLM-free demo."""
+    settings = Settings(
+        _env_file=None, store_backend="memory", demo_mode=True,
+        telegram_bot_token="123:example", telegram_chat_id="789",
+    )
+    with TestClient(create_app(settings)) as client:
+        for query in ("What does Tayoca do?", "/ask What does Tayoca do?"):
+            response = client.post(
+                "/integrations/telegram/webhook",
+                headers={"X-Telegram-Bot-Api-Secret-Token": webhook_secret("123:example")},
+                json={"update_id": 3, "message": {"chat": {"id": 789}, "text": query}},
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["method"] == "sendMessage"
+            assert data["chat_id"] == "789"
+            assert data["text"].startswith("Closest relevant source excerpt")
+            assert "not an AI-generated answer" in data["text"]
+            assert "Source:" in data["text"]
+            assert "/search" in data["text"]
+            assert len(data["text"]) < 750
+            assert "Retrieved source excerpts (not generated answers):" not in data["text"]
+
+
+def test_telegram_explicit_search_preserves_source_excerpts():
+    settings = Settings(
+        _env_file=None, store_backend="memory", demo_mode=True,
+        telegram_bot_token="123:example", telegram_chat_id="789",
+    )
+    with TestClient(create_app(settings)) as client:
+        response = client.post(
+            "/integrations/telegram/webhook",
+            headers={"X-Telegram-Bot-Api-Secret-Token": webhook_secret("123:example")},
+            json={"update_id": 4, "message": {
+                "chat": {"id": 789}, "text": "/search What does Tayoca do?"
+            }},
+        )
+        assert response.status_code == 200
+        assert response.json()["text"].startswith(
+            "Retrieved source excerpts (not generated answers):"
+        )
