@@ -120,9 +120,8 @@ async def process_update(
             hits = await service.search(query, 3, settings.default_knowledge_base)
             if not hits:
                 reply = "No matching public knowledge found."
-            elif command == "/ask" and generator is None:
-                reply = "LLM is disabled. Here are the closest source excerpts:\n\n"
-                reply += format_hits(hits)
+            elif generator is None and command != "/search":
+                reply = format_brief_hit(hits[0])
             elif generator is not None and command != "/search":
                 reply = await generator.answer(query, hits)
                 reply += "\n\nSources: " + ", ".join(
@@ -146,3 +145,19 @@ def format_hits(hits: list) -> str:
         f"[{i}] {hit.chunk.source_id}\n{hit.chunk.text.strip()[:850]}"
         for i, hit in enumerate(hits, start=1)
     )[:3600]
+
+
+def format_brief_hit(hit: Any) -> str:
+    """Return one short, attributed excerpt when LLM generation is disabled.
+
+    /search remains available for users who explicitly request full sources.
+    """
+    source = " ".join(str(hit.chunk.source_id).split())[:110]
+    excerpt = " ".join(str(hit.chunk.text).split())
+    if len(excerpt) > 420:
+        excerpt = excerpt[:417].rsplit(" ", 1)[0].rstrip(" ,;:") + "..."
+    return (
+        "Closest relevant source excerpt (not an AI-generated answer):\n\n"
+        f"{excerpt}\n\nSource: {source}\n"
+        "Use /search followed by your question to see more excerpts."
+    )
