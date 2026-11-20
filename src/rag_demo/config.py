@@ -90,8 +90,10 @@ class Settings(BaseSettings):
             raise ValueError("RAG_TELEGRAM_CHAT_ID must be a numeric Telegram chat ID")
         if self.demo_mode and self.store_backend != "memory":
             raise ValueError("RAG_DEMO_MODE requires RAG_STORE_BACKEND=memory")
-        if self.demo_mode and self.llm_provider != "disabled":
-            raise ValueError("RAG_DEMO_MODE requires RAG_LLM_PROVIDER=disabled")
+        # Public demo remains read-only (see api.py). Answer generation is
+        # opt-in; LLM credentials and model must be explicitly configured.
+        if self.llm_provider != "disabled" and not self.llm_api_key:
+            raise ValueError("RAG_LLM_API_KEY is required when LLM generation is enabled")
         if self.chunk_overlap >= self.chunk_size:
             raise ValueError("chunk_overlap must be less than chunk_size")
         if self.embedding_provider == "openai":
