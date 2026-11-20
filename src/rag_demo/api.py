@@ -80,10 +80,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 / "knowledge"
                 / "tayoca_public_demo_knowledge.md"
             )
+            app.state.public_demo_knowledge = package.read_text(encoding="utf-8")
             await service.ingest(
                 DocumentIn(
                     source_id="tayoca:public-knowledge",
-                    text=package.read_text(encoding="utf-8"),
+                    text=app.state.public_demo_knowledge,
                     metadata={
                         "origin": "bundled-public-document",
                         "filename": package.name,
@@ -199,7 +200,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Invalid JSON") from exc
         response = await process_update(
-            payload, settings, request.app.state.rag_service, generator
+            payload, settings, request.app.state.rag_service, generator,
+            getattr(request.app.state, "public_demo_knowledge", None),
         )
         return response or {"ok": True}
 
