@@ -92,8 +92,6 @@ class Settings(BaseSettings):
             raise ValueError("RAG_DEMO_MODE requires RAG_STORE_BACKEND=memory")
         # Public demo remains read-only (see api.py). Answer generation is
         # opt-in; LLM credentials and model must be explicitly configured.
-        if self.llm_provider != "disabled" and not self.llm_api_key:
-            raise ValueError("RAG_LLM_API_KEY is required when LLM generation is enabled")
         if self.chunk_overlap >= self.chunk_size:
             raise ValueError("chunk_overlap must be less than chunk_size")
         if self.embedding_provider == "openai":
@@ -106,4 +104,6 @@ class Settings(BaseSettings):
             validate_api_url(self.llm_base_url, "RAG_LLM_BASE_URL")
             if self.llm_model == "set-model-in-env":
                 raise ValueError("RAG_LLM_MODEL must be configured when LLM is enabled")
+        if self.llm_provider != "disabled" and not self.llm_api_key:
+            raise ValueError("RAG_LLM_API_KEY is required when LLM generation is enabled")
         return self
