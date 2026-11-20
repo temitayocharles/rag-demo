@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from rag_demo.config import Settings
+from rag_demo.demo_faq import resolve_public_demo_answer
 from rag_demo.generator import OpenAICompatibleGenerator
 from rag_demo.service import RagService
 
@@ -84,6 +85,7 @@ async def process_update(
     settings: Settings,
     service: RagService,
     generator: OpenAICompatibleGenerator | None,
+    public_demo_knowledge: str | None = None,
 ) -> dict[str, str] | None:
     if not isinstance(payload, dict):
         return
@@ -117,20 +119,27 @@ async def process_update(
         if not query:
             reply = "Provide a question after /search or /ask."
         else:
-            hits = await service.search(query, 3, settings.default_knowledge_base)
-            if not hits:
-                reply = "No matching public knowledge found."
-            elif generator is None and command != "/search":
-                reply = format_brief_hit(hits[0])
-            elif generator is not None and command != "/search":
-                reply = await generator.answer(query, hits)
-                reply += "\n\nSources: " + ", ".join(
-                    f"[{i}] {hit.chunk.source_id}"
-                    for i, hit in enumerate(hits, start=1)
+            if settings.demo_mode and generator is None and command != "/search":
+                reply = (
+                    resolve_public_demo_answer(query, public_demo_knowledge or "")
+                    or "I couldn't find a reliable answer in the published knowledge base. "
+                    "Try /search followed by your question to inspect source excerpts."
                 )
             else:
-                reply = "Retrieved source excerpts (not generated answers):\n\n"
-                reply += format_hits(hits)
+                hits = await service.search(query, 3, settings.default_knowledge_base)
+                if not hits:
+                    reply = "No matching public knowledge found."
+                elif generator is None and command != "/search":
+                    reply = format_brief_hit(hits[0])
+                elif generator is not None and command != "/search":
+                    reply = await generator.answer(query, hits)
+                    reply += "\n\nSources: " + ", ".join(
+                        f"[{i}] {hit.chunk.source_id}"
+                        for i, hit in enumerate(hits, start=1)
+                    )
+                else:
+                    reply = "Retrieved source excerpts (not generated answers):\n\n"
+                    reply += format_hits(hits)
     # Telegram can execute sendMessage from the authenticated webhook response.
     # No second outbound HTTP call is needed from the serverless function.
     return {

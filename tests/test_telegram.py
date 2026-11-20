@@ -171,8 +171,8 @@ def test_telegram_http_url_logging_is_disabled():
     assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING
 
 
-def test_telegram_default_answer_is_bounded_not_a_source_dump():
-    """Ordinary text and /ask must be short in the deliberately LLM-free demo."""
+def test_telegram_default_answer_is_grounded_not_a_source_dump():
+    """Public no-LLM demo replies from actual FAQ, not arbitrary hash hits."""
     settings = Settings(
         _env_file=None, store_backend="memory", demo_mode=True,
         telegram_bot_token="123:example", telegram_chat_id="789",
@@ -188,12 +188,43 @@ def test_telegram_default_answer_is_bounded_not_a_source_dump():
             data = response.json()
             assert data["method"] == "sendMessage"
             assert data["chat_id"] == "789"
-            assert data["text"].startswith("Closest relevant source excerpt")
-            assert "not an AI-generated answer" in data["text"]
-            assert "Source:" in data["text"]
-            assert "/search" in data["text"]
+            assert "engineering-led technology company" in data["text"]
+            assert "Cloud cost and FinOps" in data["text"]
+            assert "Source: https://tayoca.com/" in data["text"]
+            assert "Operator Brief" not in data["text"]
             assert len(data["text"]) < 750
-            assert "Retrieved source excerpts (not generated answers):" not in data["text"]
+
+
+def test_telegram_public_faq_and_unknown_question_fail_closed():
+    settings = Settings(
+        _env_file=None, store_backend="memory", demo_mode=True,
+        telegram_bot_token="123:example", telegram_chat_id="789",
+    )
+    with TestClient(create_app(settings)) as client:
+        for query, expected in (
+            ("What is Sivanta?", "conversation-led commerce automation"),
+            ("What services does Tayoca provide?", "reliability and DevSecOps"),
+            ("What is the Operator Brief?", "recurring briefing"),
+            ("How can I contact Tayoca?", "support@tayoca.com"),
+        ):
+            response = client.post(
+                "/integrations/telegram/webhook",
+                headers={"X-Telegram-Bot-Api-Secret-Token": webhook_secret("123:example")},
+                json={"update_id": 9, "message": {"chat": {"id": 789}, "text": query}},
+            )
+            assert response.status_code == 200
+            assert expected in response.json()["text"]
+
+        unknown = client.post(
+            "/integrations/telegram/webhook",
+            headers={"X-Telegram-Bot-Api-Secret-Token": webhook_secret("123:example")},
+            json={"update_id": 10, "message": {
+                "chat": {"id": 789}, "text": "How can I tune a solar inverter?"
+            }},
+        )
+        assert unknown.status_code == 200
+        assert "couldn't find a reliable answer" in unknown.json()["text"]
+        assert "Operator Brief" not in unknown.json()["text"]
 
 
 def test_telegram_explicit_search_preserves_source_excerpts():
